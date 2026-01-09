@@ -1,0 +1,41 @@
+# Python
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# データファイル
+output/
+web_data/*.geojson
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+building_centroid_all.geojson
+fukuoka_40100_food_business_all.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ログ
+*.log
+*.tmp
+*.bak
