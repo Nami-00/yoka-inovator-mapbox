@@ -16,12 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function initMap() {
     map = new mapboxgl.Map({
         container: 'map',
-        style: 'mapbox://styles/mapbox/light-v11',
+        style: 'mapbox://styles/mapbox/streets-v12',
         center: [130.4017, 33.5904],
         zoom: 10,
-        pitch: 0,
-        bearing: 0
-    });
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
