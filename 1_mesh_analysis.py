@@ -14,7 +14,7 @@ OUTPUT_DIR = BASE_DIR / 'output'
 REPORT_DIR = OUTPUT_DIR
 
 # 入力ファイル
-INPUT_MESH_DIR = DATA_DIR / 'mesh_shapefiles' # mesh ZIPファイルを解凍したディレクトリ
+INPUT_MESH_DIR = DATA_DIR / 'mesh_shapefiles'  # mesh ZIPファイルを解凍したディレクトリ
 INPUT_BUILDING_FILE = DATA_DIR / 'building_centroid_all.geojson'
 INPUT_FOOD_FILE = DATA_DIR / 'fukuoka_40100_food_business_all.csv'
 
@@ -53,7 +53,7 @@ print()
 # ==================== 1. メッシュデータ読み込み ====================
 print("📂 [1/6] メッシュデータ読み込み")
 
-mesh_files = list(INPUT_MESH_DIR.rglob('*.shp')) 
+mesh_files = list(INPUT_MESH_DIR.rglob('*.shp'))
 if not mesh_files:
     raise FileNotFoundError(f"❌ {INPUT_MESH_DIR} に .shp ファイルが見つかりません")
 

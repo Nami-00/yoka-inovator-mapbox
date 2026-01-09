@@ -1,5 +1,5 @@
 // Mapbox アクセストークン（必ず自分のトークンに置き換えてください）
-mapboxgl.accessToken = 'pk.eyJ1IjoibmFtaTAwIiwiYSI6ImNtazR4OGdiczBjajMzZnExbmc4OTZtZWcifQ.ezFfwXNOK8Ve9I7kz5AMIw';
+mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN_HERE';
 
 let map;
 let currentClusterCount = 6;
@@ -111,133 +111,177 @@ async function loadClusterData(k) {
 }
 
 function updateMap() {
-    // 地図が準備できていない場合は待機
+    // 地図が準備できているか確認
     if (!map.isStyleLoaded()) {
-        console.log('地図スタイル読み込み待機中...');
+        console.log('地図準備待機中...');
         map.once('idle', updateMap);
         return;
     }
 
-    // データが準備できていない場合は何もしない
     if (!meshData) {
-        console.log('データがまだ読み込まれていません');
+        console.log('データ未準備');
         return;
     }
 
-    // 既存レイヤーとソースを削除
+    // 既存レイヤー削除
     if (map.getLayer('mesh-fill')) map.removeLayer('mesh-fill');
     if (map.getLayer('mesh-outline')) map.removeLayer('mesh-outline');
     if (map.getSource('mesh-data')) map.removeSource('mesh-data');
 
+    // データソース追加
     map.addSource('mesh-data', {
         type: 'geojson',
         data: meshData
     });
 
-    updateMapStyle();
-    
-    // イベントリスナーは一度だけ登録
-    if (!map._clusterEventListenersAdded) {
-        map.on('click', 'mesh-fill', (e) => {
-            const properties = e.features[0].properties;
-            showPopup(e.lngLat, properties);
-        });
-
-        map.on('mouseenter', 'mesh-fill', () => {
-            map.getCanvas().style.cursor = 'pointer';
-        });
-        
-        map.on('mouseleave', 'mesh-fill', () => {
-            map.getCanvas().style.cursor = '';
-        });
-        
-        map._clusterEventListenersAdded = true;
-    }
-}
-
-function updateMapStyle() {
-    if (!map.getSource('mesh-data')) return;
-
-    const opacity = parseInt(document.getElementById('opacity-slider').value) / 100;
-    
-    // フィルター条件（cluster列を参照）
-    const filter = ['in', ['get', 'cluster'], ['literal', Array.from(visibleClusters)]];
-    
-    let fillColor;
-    
-    if (currentDisplayMode === 'cluster') {
-        // クラスター別カラー（cluster列を参照）
-        const colorExpression = ['match', ['get', 'cluster']];
-        clusterConfig.clusters.forEach(cluster => {
-            colorExpression.push(cluster.id, cluster.color);
-        });
-        colorExpression.push('#cccccc');
-        fillColor = colorExpression;
-        
-    } else if (currentDisplayMode === 'density') {
-        // 飲食店密度のヒートマップ
-        fillColor = [
-            'interpolate',
-            ['linear'],
-            ['get', '飲食店数'],
-            0, '#ffffcc',
-            10, '#ffeda0',
-            20, '#fed976',
-            30, '#feb24c',
-            50, '#fd8d3c',
-            100, '#fc4e2a',
-            200, '#e31a1c',
-            500, '#bd0026'
-        ];
-        
-    } else if (currentDisplayMode === 'buildings') {
-        // 建物総数のグラデーション
-        fillColor = [
-            'interpolate',
-            ['linear'],
-            ['get', '建物総数'],
-            0, '#f0f9e8',
-            50, '#ccebc5',
-            100, '#a8ddb5',
-            200, '#7bccc4',
-            500, '#4eb3d3',
-            1000, '#2b8cbe',
-            2000, '#08589e'
-        ];
-    }
-
-    // レイヤーを削除して再追加
-    if (map.getLayer('mesh-fill')) map.removeLayer('mesh-fill');
-    if (map.getLayer('mesh-outline')) map.removeLayer('mesh-outline');
-
+    // メッシュ塗りつぶしレイヤー
     map.addLayer({
         id: 'mesh-fill',
         type: 'fill',
         source: 'mesh-data',
         paint: {
-            'fill-color': fillColor,
-            'fill-opacity': opacity
-        },
-        filter: filter
+            'fill-opacity': 0.7
+        }
     });
 
+    // メッシュ境界線レイヤー
     map.addLayer({
         id: 'mesh-outline',
         type: 'line',
         source: 'mesh-data',
         paint: {
-            'line-color': '#888',
+            'line-color': '#666',
             'line-width': 0.5,
-            'line-opacity': 0.5
-        },
-        filter: filter
+            'line-opacity': 0.3
+        }
     });
+
+    updateMapStyle();
+
+    // ポップアップイベント（一度だけ登録）
+    if (!map._clusterEventListenersAdded) {
+        map.on('click', 'mesh-fill', (e) => {
+            const properties = e.features[0].properties;
+            
+            let html = '<div style="max-width: 300px;">';
+            html += `<h3>メッシュ情報</h3>`;
+            html += `<p><strong>クラスター:</strong> ${properties['cluster']}</p>`;
+            
+            if (clusterConfig) {
+                const cluster = clusterConfig.clusters.find(c => c.id == properties['cluster']);
+                if (cluster) {
+                    html += `<p><strong>クラスター名:</strong> ${cluster.name}</p>`;
+                }
+            }
+            
+            html += `<p><strong>建物総数:</strong> ${properties['建物総数']}</p>`;
+            html += `<p><strong>飲食店数:</strong> ${properties['飲食店数']}</p>`;
+            html += '</div>';
+
+            new mapboxgl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map);
+        });
+
+        map.on('mouseenter', 'mesh-fill', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', 'mesh-fill', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+        map._clusterEventListenersAdded = true;
+    }
+}
+
+function updateMapStyle() {
+    if (!map.getLayer('mesh-fill') || !clusterConfig) return;
+
+    // フィルター設定
+    const filter = ['in', ['get', 'cluster'], ['literal', Array.from(visibleClusters)]];
+    map.setFilter('mesh-fill', filter);
+    map.setFilter('mesh-outline', filter);
+
+    // 色設定
+    let colorExpression;
+
+    if (currentDisplayMode === 'cluster') {
+        // クラスター別の色
+        colorExpression = ['match', ['get', 'cluster']];
+        
+        clusterConfig.clusters.forEach(cluster => {
+            colorExpression.push(cluster.id, cluster.color);
+        });
+        
+        colorExpression.push('#cccccc');  // デフォルト
+    } else if (currentDisplayMode === 'density') {
+        // 飲食店密度ヒートマップ
+        colorExpression = [
+            'interpolate', ['linear'], ['get', '飲食店数'],
+            0, '#ffffcc',
+            10, '#ffeda0',
+            20, '#fed976',
+            50, '#feb24c',
+            100, '#fd8d3c',
+            200, '#fc4e2a',
+            500, '#e31a1c',
+            1000, '#bd0026'
+        ];
+    } else if (currentDisplayMode === 'buildings') {
+        // 建物総数ヒートマップ
+        colorExpression = [
+            'interpolate', ['linear'], ['get', '建物総数'],
+            0, '#f7fbff',
+            50, '#deebf7',
+            100, '#c6dbef',
+            200, '#9ecae1',
+            400, '#6baed6',
+            800, '#4292c6',
+            1600, '#2171b5',
+            3200, '#08519c',
+            6400, '#08306b'
+        ];
+    }
+
+    map.setPaintProperty('mesh-fill', 'fill-color', colorExpression);
 }
 
 function updateUI() {
+    if (!clusterConfig) return;
+
+    // 統計情報更新
+    updateStatistics();
+    
+    // クラスターフィルター更新
     updateClusterFilters();
-    updateStats();
+    
+    // レジェンド更新
     updateLegend();
+}
+
+function updateStatistics() {
+    document.getElementById('total-meshes').textContent = 
+        clusterConfig.total_meshes.toLocaleString();
+    
+    const totalBuildings = clusterConfig.clusters.reduce(
+        (sum, c) => sum + c.avg_buildings * c.count, 0
+    );
+    document.getElementById('total-buildings').textContent = 
+        Math.round(totalBuildings).toLocaleString();
+    
+    const avgBuildings = clusterConfig.clusters.reduce(
+        (sum, c) => sum + c.avg_buildings, 0
+    ) / clusterConfig.clusters.length;
+    document.getElementById('avg-buildings').textContent = 
+        avgBuildings.toFixed(1);
+    
+    const avgRestaurants = clusterConfig.clusters.reduce(
+        (sum, c) => sum + c.avg_restaurants, 0
+    ) / clusterConfig.clusters.length;
+    document.getElementById('avg-restaurants').textContent = 
+        avgRestaurants.toFixed(1);
 }
 
 function updateClusterFilters() {
@@ -245,13 +289,14 @@ function updateClusterFilters() {
     container.innerHTML = '';
 
     clusterConfig.clusters.forEach(cluster => {
-        const item = document.createElement('div');
-        item.className = 'cluster-filter-item';
-        
+        const div = document.createElement('div');
+        div.className = 'cluster-filter-item';
+
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = `cluster-${cluster.id}`;
         checkbox.checked = visibleClusters.has(cluster.id);
+        
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) {
                 visibleClusters.add(cluster.id);
@@ -259,114 +304,109 @@ function updateClusterFilters() {
                 visibleClusters.delete(cluster.id);
             }
             updateMapStyle();
-            updateStats();
+            updateStatistics();
         });
-
-        const colorBox = document.createElement('div');
-        colorBox.className = 'cluster-color-box';
-        colorBox.style.backgroundColor = cluster.color;
 
         const label = document.createElement('label');
         label.htmlFor = `cluster-${cluster.id}`;
-        label.textContent = `${cluster.name} (${cluster.count}件)`;
-        label.style.cursor = 'pointer';
-
-        item.appendChild(checkbox);
-        item.appendChild(colorBox);
-        item.appendChild(label);
-        container.appendChild(item);
+        
+        const colorBox = document.createElement('span');
+        colorBox.className = 'cluster-color';
+        colorBox.style.backgroundColor = cluster.color;
+        
+        const text = document.createElement('span');
+        text.textContent = `${cluster.name} (${cluster.count})`;
+        
+        label.appendChild(colorBox);
+        label.appendChild(text);
+        
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        
+        container.appendChild(div);
     });
 }
 
-function updateStats() {
-    const content = document.getElementById('stats-content');
-    
-    const totalMeshes = clusterConfig.total_meshes;
-    const visibleMeshes = clusterConfig.clusters
-        .filter(c => visibleClusters.has(c.id))
-        .reduce((sum, c) => sum + c.count, 0);
-    
-    const avgBuildings = visibleMeshes > 0 ? (clusterConfig.clusters
-        .filter(c => visibleClusters.has(c.id))
-        .reduce((sum, c) => sum + c.avg_buildings * c.count, 0) / visibleMeshes).toFixed(1) : 0;
-    
-    const avgRestaurants = visibleMeshes > 0 ? (clusterConfig.clusters
-        .filter(c => visibleClusters.has(c.id))
-        .reduce((sum, c) => sum + c.avg_restaurants * c.count, 0) / visibleMeshes).toFixed(1) : 0;
-
-    content.innerHTML = `
-        <div class="popup-info">
-            <span class="popup-label">総メッシュ数:</span>
-            <span class="popup-value">${totalMeshes.toLocaleString()}</span>
-            
-            <span class="popup-label">表示中:</span>
-            <span class="popup-value">${visibleMeshes.toLocaleString()} (${(visibleMeshes/totalMeshes*100).toFixed(1)}%)</span>
-            
-            <span class="popup-label">平均建物数:</span>
-            <span class="popup-value">${avgBuildings}</span>
-            
-            <span class="popup-label">平均飲食店数:</span>
-            <span class="popup-value">${avgRestaurants}</span>
-        </div>
-    `;
-}
-
 function updateLegend() {
-    const content = document.getElementById('legend-content');
+    const container = document.getElementById('legend-content');
     
-    if (currentDisplayMode === 'cluster') {
-        content.innerHTML = clusterConfig.clusters.map(cluster => `
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: ${cluster.color}"></div>
-                <span>${cluster.name}</span>
-            </div>
-        `).join('');
+    if (currentDisplayMode === 'cluster' && clusterConfig) {
+        container.innerHTML = '<h4>クラスター凡例</h4>';
         
+        clusterConfig.clusters.forEach(cluster => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            
+            const colorBox = document.createElement('span');
+            colorBox.className = 'legend-color';
+            colorBox.style.backgroundColor = cluster.color;
+            
+            const label = document.createElement('span');
+            label.className = 'legend-label';
+            label.textContent = cluster.name;
+            
+            item.appendChild(colorBox);
+            item.appendChild(label);
+            container.appendChild(item);
+        });
     } else if (currentDisplayMode === 'density') {
-        content.innerHTML = `
-            <div class="legend-item">
-                <div class="legend-color" style="background: linear-gradient(to right, #ffffcc, #bd0026)"></div>
-                <span>飲食店密度 (低 → 高)</span>
-            </div>
-        `;
+        container.innerHTML = '<h4>飲食店密度</h4>';
+        const colors = [
+            { color: '#ffffcc', label: '0' },
+            { color: '#ffeda0', label: '10' },
+            { color: '#fed976', label: '20' },
+            { color: '#feb24c', label: '50' },
+            { color: '#fd8d3c', label: '100' },
+            { color: '#fc4e2a', label: '200' },
+            { color: '#e31a1c', label: '500' },
+            { color: '#bd0026', label: '1000+' }
+        ];
         
+        colors.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'legend-item';
+            
+            const colorBox = document.createElement('span');
+            colorBox.className = 'legend-color';
+            colorBox.style.backgroundColor = item.color;
+            
+            const label = document.createElement('span');
+            label.className = 'legend-label';
+            label.textContent = item.label;
+            
+            div.appendChild(colorBox);
+            div.appendChild(label);
+            container.appendChild(div);
+        });
     } else if (currentDisplayMode === 'buildings') {
-        content.innerHTML = `
-            <div class="legend-item">
-                <div class="legend-color" style="background: linear-gradient(to right, #f0f9e8, #08589e)"></div>
-                <span>建物総数 (少 → 多)</span>
-            </div>
-        `;
+        container.innerHTML = '<h4>建物総数</h4>';
+        const colors = [
+            { color: '#f7fbff', label: '0' },
+            { color: '#deebf7', label: '50' },
+            { color: '#c6dbef', label: '100' },
+            { color: '#9ecae1', label: '200' },
+            { color: '#6baed6', label: '400' },
+            { color: '#4292c6', label: '800' },
+            { color: '#2171b5', label: '1600' },
+            { color: '#08519c', label: '3200' },
+            { color: '#08306b', label: '6400+' }
+        ];
+        
+        colors.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'legend-item';
+            
+            const colorBox = document.createElement('span');
+            colorBox.className = 'legend-color';
+            colorBox.style.backgroundColor = item.color;
+            
+            const label = document.createElement('span');
+            label.className = 'legend-label';
+            label.textContent = item.label;
+            
+            div.appendChild(colorBox);
+            div.appendChild(label);
+            container.appendChild(div);
+        });
     }
-}
-
-function showPopup(lngLat, properties) {
-    const cluster = clusterConfig.clusters.find(c => c.id === properties['cluster']);
-    
-    const html = `
-        <h4>メッシュ情報</h4>
-        <div class="popup-info">
-            <span class="popup-label">クラスター:</span>
-            <span class="popup-value" style="color: ${cluster.color}; font-weight: bold;">
-                ${cluster.name}
-            </span>
-            
-            <span class="popup-label">建物総数:</span>
-            <span class="popup-value">${parseInt(properties['建物総数']).toLocaleString()}</span>
-            
-            <span class="popup-label">飲食店数:</span>
-            <span class="popup-value">${parseInt(properties['飲食店数']).toLocaleString()}</span>
-            
-            <span class="popup-label">住宅:</span>
-            <span class="popup-value">${parseInt(properties['建物_住宅'] || 0).toLocaleString()}</span>
-            
-            <span class="popup-label">商業施設:</span>
-            <span class="popup-value">${parseInt(properties['建物_商業施設'] || 0).toLocaleString()}</span>
-        </div>
-    `;
-    
-    new mapboxgl.Popup()
-        .setLngLat(lngLat)
-        .setHTML(html)
-        .addTo(map);
 }

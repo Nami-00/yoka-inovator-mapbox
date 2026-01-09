@@ -346,15 +346,11 @@ def create_visualizations(result_df, cluster_df, cluster_names, n_clusters, out_
         ax.grid(axis='y', alpha=config.GRID_ALPHA)
 
     ax = axes[1, 0]
-    # 全用途の比率を取得（9種類）
-    usage_cols = [c for c in cluster_df.columns if c.endswith('比率')]
+    usage_cols = [c for c in cluster_df.columns if c.endswith('比率')][:4]
     if usage_cols:
-        # カラーパレット（9色）
-        colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', 
-                '#ff7f00', '#ffff33', '#a65628', '#f781bf', '#999999']
         cluster_df[usage_cols].plot(
             kind='bar', stacked=True, ax=ax,
-            color=colors[:len(usage_cols)]
+            color=['#8dd3c7', '#ffffb3', '#bebada', '#fb8072']
         )
         ax.set_title('クラスタ別建物用途比率', fontsize=14, fontweight='bold')
         ax.set_xlabel('クラスタID')

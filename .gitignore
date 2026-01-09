@@ -14,6 +14,7 @@ dist/
 
 # データファイル
 output/
+web_data/*.geojson
 *.shp
 *.dbf
 *.shx

@@ -4,17 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>福岡市・北九州市 クラスター分析ビューア</title>
-    
-    <!-- ファビコンのエラーを防ぐ -->
     <link rel="icon" href="data:,">
-      
+    
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="sidebar">
-        <h1>🗺️ クラスター分析</h1>
+        <h1>クラスター分析</h1>
         
         <div class="control-group">
             <label>クラスター数:</label>
@@ -45,15 +43,20 @@
             <div id="cluster-filters"></div>
         </div>
         
-        <button id="reset-view" class="btn-reset">🔄 表示リセット</button>
+        <button id="reset-view" class="btn-reset">表示リセット</button>
         
         <div id="stats-panel">
-            <h3>📊 統計情報</h3>
-            <div id="stats-content">データ読み込み中...</div>
+            <h3>統計情報</h3>
+            <div id="stats-content">
+                <p><strong>総メッシュ数:</strong> <span id="total-meshes">-</span></p>
+                <p><strong>総建物数:</strong> <span id="total-buildings">-</span></p>
+                <p><strong>平均建物数:</strong> <span id="avg-buildings">-</span></p>
+                <p><strong>平均飲食店数:</strong> <span id="avg-restaurants">-</span></p>
+            </div>
         </div>
         
         <div id="legend-panel">
-            <h3>📍 凡例</h3>
+            <h3>凡例</h3>
             <div id="legend-content"></div>
         </div>
     </div>
