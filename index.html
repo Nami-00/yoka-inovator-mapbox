@@ -8,6 +8,7 @@
     
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -20,10 +21,9 @@
                 <option value="4">4個</option>
                 <option value="5">5個</option>
                 <option value="6" selected>6個</option>
-                <option value="7">7個
-                <option value="8">8個
-                <option value="9">9個
-                </option>
+                <option value="7">7個</option>
+                <option value="8">8個</option>
+                <option value="9">9個</option>
             </select>
         </div>
         
@@ -49,6 +49,32 @@
         <div class="control-group">
             <label>透明度: <span id="opacity-value">70%</span></label>
             <input type="range" id="opacity-slider" min="0" max="100" value="70">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="show-stations"> 駅を表示
+            </label>
+        </div>
+        
+        <div class="control-group" id="station-filters-group" style="display: none;">
+            <label>駅規模フィルター:</label>
+            <div id="station-scale-filters">
+                <label><input type="checkbox" id="scale-small" checked> 小規模 (2,000人未満)</label>
+                <label><input type="checkbox" id="scale-medium" checked> 中規模 (2,000-10,000人)</label>
+                <label><input type="checkbox" id="scale-large" checked> 大規模 (10,000人以上)</label>
+            </div>
+        </div>
+        
+        <div class="control-group" id="station-buffer-group" style="display: none;">
+            <label>駅からの距離バッファー:</label>
+            <div id="station-buffer-controls">
+                <label><input type="checkbox" id="buffer-enable"> バッファーを表示</label>
+                <div id="buffer-distance-control" style="display: none; margin-top: 10px;">
+                    <label>距離: <span id="buffer-distance-value">500m</span></label>
+                    <input type="range" id="buffer-distance" min="100" max="2000" step="100" value="500">
+                </div>
+            </div>
         </div>
         
         <div class="control-group">

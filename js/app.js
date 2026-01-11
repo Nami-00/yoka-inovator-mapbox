@@ -1,4 +1,4 @@
-// Mapbox アクセストークン（必ず自分のトークンに置き換えてください）
+// Mapbox アクセストークン
 mapboxgl.accessToken = 'pk.eyJ1IjoibmFtaTAwIiwiYSI6ImNtazZnc2RnbzBvdnEzZXI1ZHhlN2Yyc3gifQ.ikUmsp1TSWrZNMteouL9aQ';
 
 let map;
@@ -7,6 +7,11 @@ let currentDisplayMode = 'cluster';
 let meshData = null;
 let clusterConfig = null;
 let visibleClusters = new Set();
+let stationData = null;
+let showStations = false;
+let stationScaleFilters = { small: true, medium: true, large: true };
+let bufferEnabled = false;
+let bufferDistance = 500;
 
 document.addEventListener('DOMContentLoaded', () => {
     initMap();
@@ -45,6 +50,7 @@ function initMap() {
     map.on('load', () => {
         console.log('地図読み込み完了');
         loadClusterData(currentClusterCount);
+        loadStationData();
     });
 }
 
@@ -53,7 +59,6 @@ function setupControls() {
     document.getElementById('cluster-count').addEventListener('change', (e) => {
         currentClusterCount = parseInt(e.target.value);
         
-        // 既存レイヤーを削除
         if (map.getLayer('mesh-fill')) map.removeLayer('mesh-fill');
         if (map.getLayer('mesh-outline')) map.removeLayer('mesh-outline');
         if (map.getSource('mesh-data')) map.removeSource('mesh-data');
@@ -78,6 +83,36 @@ function setupControls() {
         }
     });
 
+    // 駅表示切替
+    document.getElementById('show-stations').addEventListener('change', (e) => {
+        showStations = e.target.checked;
+        document.getElementById('station-filters-group').style.display = showStations ? 'block' : 'none';
+        document.getElementById('station-buffer-group').style.display = showStations ? 'block' : 'none';
+        updateStationDisplay();
+    });
+
+    // 駅規模フィルター
+    ['small', 'medium', 'large'].forEach(scale => {
+        document.getElementById(`scale-${scale}`).addEventListener('change', (e) => {
+            stationScaleFilters[scale] = e.target.checked;
+            updateStationDisplay();
+        });
+    });
+
+    // バッファー表示切替
+    document.getElementById('buffer-enable').addEventListener('change', (e) => {
+        bufferEnabled = e.target.checked;
+        document.getElementById('buffer-distance-control').style.display = bufferEnabled ? 'block' : 'none';
+        updateStationBuffers();
+    });
+
+    // バッファー距離変更
+    document.getElementById('buffer-distance').addEventListener('input', (e) => {
+        bufferDistance = parseInt(e.target.value);
+        document.getElementById('buffer-distance-value').textContent = `${bufferDistance}m`;
+        updateStationBuffers();
+    });
+
     // リセットボタン
     document.getElementById('reset-view').addEventListener('click', () => {
         map.flyTo({
@@ -96,6 +131,17 @@ function setupControls() {
     });
 }
 
+async function loadStationData() {
+    try {
+        console.log('駅データ読み込み中...');
+        const response = await fetch('web_data/stations.geojson');
+        stationData = await response.json();
+        console.log(`駅データ読み込み完了: ${stationData.features.length} 駅`);
+    } catch (error) {
+        console.error('駅データ読み込みエラー:', error);
+    }
+}
+
 async function loadClusterData(k) {
     try {
         console.log(`データ読み込み中 k=${k}...`);
@@ -112,7 +158,6 @@ async function loadClusterData(k) {
         
         visibleClusters = new Set(clusterConfig.clusters.map(c => c.id));
         
-        // 地図が準備できるまで待機
         if (map.isStyleLoaded()) {
             updateMap();
             updateUI();
@@ -129,7 +174,6 @@ async function loadClusterData(k) {
 }
 
 function updateMap() {
-    // 地図が準備できているか確認
     if (!map.isStyleLoaded()) {
         console.log('地図準備待機中...');
         map.once('idle', updateMap);
@@ -176,7 +220,247 @@ function updateMap() {
 
     updateMapStyle();
 
-    // ポップアップイベント（一度だけ登録）
+    // ポップアップイベント
+    if (!map._clusterEventListenersAdded) {
+        map.on('click', 'mesh-fill', (e) => {
+            const properties = e.features[0].properties;
+            
+            let html = '<div style="max-width: 300px;">';
+            html += `<h3>メッシュ情報</h3>`;
+            html += `<p><strong>クラスター:</strong> ${properties['cluster']}</p>`;
+            
+            if (clusterConfig) {
+                const cluster = clusterConfig.clusters.find(c => c.id == properties['cluster']);
+                if (cluster) {
+                    html += `<p><strong>クラスター名:</strong> ${cluster.name}</p>`;
+                }
+            }
+            
+            html += `<p><strong>建物総数:</strong> ${properties['建物総数']}</p>`;
+            html += `<p><strong>飲食店数:</strong> ${properties['飲食店数']}</p>`;
+            
+            const usages = ['官公庁施設', '共同住宅', '住宅', '商業施設', '文教厚生施設', 
+                           '業務施設', '商業系複合施設', '店舗等併用住宅', '店舗等併用共同住宅', '宿泊施設'];
+            const totalBuildings = properties['建物総数'];
+            usages.forEach(usage => {
+                const field = '建物_' + usage;
+                if (properties[field] && properties[field] > 0) {
+                    const count = properties[field];
+                    const ratio = totalBuildings > 0 ? (count / totalBuildings * 100).toFixed(1) : 0;
+                    html += `<p><strong>${usage}:</strong> ${count} (${ratio}%)</p>`;
+                }
+            });
+            
+            html += '</div>';
+
+            new mapboxgl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map);
+        });
+
+        map.on('mouseenter', 'mesh-fill', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', 'mesh-fill', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+        map._clusterEventListenersAdded = true;
+    }
+}
+
+function updateStationDisplay() {
+    // 地図とデータの準備確認
+    if (!map || !map.isStyleLoaded()) {
+        console.log('地図準備待機中...');
+        return;
+    }
+    
+    if (!stationData) {
+        console.log('駅データ未読み込み');
+        return;
+    }
+
+    // 既存の駅レイヤーを削除
+    if (map.getLayer('stations')) map.removeLayer('stations');
+    if (map.getLayer('station-labels')) map.removeLayer('station-labels');
+    if (map.getSource('stations')) map.removeSource('stations');
+
+    if (!showStations) {
+        updateLegend();
+        return;
+    }
+
+    // 駅データをフィルタリング
+    const filteredStations = {
+        type: 'FeatureCollection',
+        features: stationData.features.filter(feature => {
+            const passengers = feature.properties['乗降客数2023'] || 0;
+            
+            if (passengers < 2000 && stationScaleFilters.small) return true;
+            if (passengers >= 2000 && passengers < 10000 && stationScaleFilters.medium) return true;
+            if (passengers >= 10000 && stationScaleFilters.large) return true;
+            
+            return false;
+        }).map(feature => {
+            const coords = feature.geometry.coordinates[0][0];
+            return {
+                type: 'Feature',
+                properties: feature.properties,
+                geometry: {
+                    type: 'Point',
+                    coordinates: coords
+                }
+            };
+        })
+    };
+
+    // 駅データソース追加
+    map.addSource('stations', {
+        type: 'geojson',
+        data: filteredStations
+    });
+
+    // 駅マーカーレイヤー（1000人刻みで色分け）
+    map.addLayer({
+        id: 'stations',
+        type: 'circle',
+        source: 'stations',
+        paint: {
+            'circle-radius': [
+                'interpolate', ['linear'], ['get', '乗降客数2023'],
+                0, 4,
+                1000, 5,
+                5000, 8,
+                10000, 11,
+                20000, 14,
+                50000, 18
+            ],
+            'circle-color': [
+                'step', ['get', '乗降客数2023'],
+                '#ffffcc',      // 0-999人
+                1000, '#ffeda0',   // 1,000-1,999人
+                2000, '#fed976',   // 2,000-2,999人
+                3000, '#feb24c',   // 3,000-3,999人
+                4000, '#fd8d3c',   // 4,000-4,999人
+                5000, '#fc4e2a',   // 5,000-5,999人
+                6000, '#e31a1c',   // 6,000-6,999人
+                7000, '#bd0026',   // 7,000-7,999人
+                8000, '#800026',   // 8,000-8,999人
+                9000, '#67001f',   // 9,000-9,999人
+                10000, '#4d0018'   // 10,000人以上
+            ],
+            'circle-opacity': 0.8,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+        }
+    });
+
+    // 駅名ラベルレイヤー
+    map.addLayer({
+        id: 'station-labels',
+        type: 'symbol',
+        source: 'stations',
+        layout: {
+            'text-field': ['get', '駅名'],
+            'text-font': ['Open Sans Regular'],
+            'text-size': 12,
+            'text-anchor': 'top',
+            'text-offset': [0, 1]
+        },
+        paint: {
+            'text-color': '#000000',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 2
+        }
+    });
+
+    // 駅クリックイベント（一度だけ登録）
+    if (!map._stationEventListenersAdded) {
+        map.on('click', 'stations', (e) => {
+            const props = e.features[0].properties;
+            const html = `
+                <div style="max-width: 250px;">
+                    <h3>${props['駅名']}</h3>
+                    <p><strong>運営会社:</strong> ${props['運営会社']}</p>
+                    <p><strong>路線名:</strong> ${props['路線名']}</p>
+                    <p><strong>乗降客数(2023):</strong> ${props['乗降客数2023']?.toLocaleString()}人</p>
+                </div>
+            `;
+            new mapboxgl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map);
+        });
+
+        map.on('mouseenter', 'stations', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', 'stations', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+        map._stationEventListenersAdded = true;
+    }
+
+    updateStationBuffers();
+    updateLegend();
+}
+
+
+function updateStationBuffers() {
+    if (!map.isStyleLoaded()) return;
+
+    // 既存のバッファーレイヤーを削除
+    if (map.getLayer('station-buffers')) map.removeLayer('station-buffers');
+    if (map.getSource('station-buffers')) map.removeSource('station-buffers');
+
+    if (!bufferEnabled || !showStations || !stationData) return;
+
+    // バッファーを生成
+    const bufferedFeatures = [];
+    const filteredStations = stationData.features.filter(feature => {
+        const passengers = feature.properties['乗降客数2023'] || 0;
+        
+        if (passengers < 2000 && stationScaleFilters.small) return true;
+        if (passengers >= 2000 && passengers < 10000 && stationScaleFilters.medium) return true;
+        if (passengers >= 10000 && stationScaleFilters.large) return true;
+        
+        return false;
+    });
+
+    filteredStations.forEach(feature => {
+        const coords = feature.geometry.coordinates[0][0];
+        const point = turf.point(coords);
+        const buffered = turf.buffer(point, bufferDistance / 1000, { units: 'kilometers' });
+        bufferedFeatures.push(buffered);
+    });
+
+    if (bufferedFeatures.length === 0) return;
+
+    const bufferCollection = {
+        type: 'FeatureCollection',
+        features: bufferedFeatures
+    };
+
+    map.addSource('station-buffers', {
+        type: 'geojson',
+        data: bufferCollection
+    });
+
+    map.addLayer({
+        id: 'station-buffers',
+        type: 'fill',
+        source: 'station-buffers',
+        paint: {
+            'fill-color': '#0080ff',
+            'fill-opacity': 0.2
+        }
+    }, 'mesh-fill');
+}
     if (!map._clusterEventListenersAdded) {
         map.on('click', 'mesh-fill', (e) => {
             const properties = e.features[0].properties;
@@ -226,7 +510,7 @@ function updateMap() {
 
         map._clusterEventListenersAdded = true;
     }
-}
+
 
 function updateMapStyle() {
     if (!map.getLayer('mesh-fill') || !clusterConfig) return;
@@ -334,6 +618,46 @@ function updateStatistics() {
     document.getElementById('avg-restaurants').textContent = 
         avgRestaurants.toFixed(1);
 }
+
+    document.getElementById('avg-restaurants').textContent = 
+        avgRestaurants.toFixed(1);
+        if (showStations) {
+        container.innerHTML += '<h4 style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.3);">駅（乗降客数2023）</h4>';
+        
+        const stationColors = [
+            { color: '#ffffcc', label: '0-999人' },
+            { color: '#ffeda0', label: '1,000-1,999人' },
+            { color: '#fed976', label: '2,000-2,999人' },
+            { color: '#feb24c', label: '3,000-3,999人' },
+            { color: '#fd8d3c', label: '4,000-4,999人' },
+            { color: '#fc4e2a', label: '5,000-5,999人' },
+            { color: '#e31a1c', label: '6,000-6,999人' },
+            { color: '#bd0026', label: '7,000-7,999人' },
+            { color: '#800026', label: '8,000-8,999人' },
+            { color: '#67001f', label: '9,000-9,999人' },
+            { color: '#4d0018', label: '10,000人以上' }
+        ];
+        
+        stationColors.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'legend-item';
+            
+            const colorBox = document.createElement('span');
+            colorBox.className = 'legend-color';
+            colorBox.style.backgroundColor = item.color;
+            colorBox.style.borderRadius = '50%';
+            
+            const label = document.createElement('span');
+            label.className = 'legend-label';
+            label.textContent = item.label;
+            
+            div.appendChild(colorBox);
+            div.appendChild(label);
+            container.appendChild(div);
+        });
+    }
+    // ↑↑↑ ここまで ↑↑↑
+
 
 function updateClusterFilters() {
     const container = document.getElementById('cluster-filters');
